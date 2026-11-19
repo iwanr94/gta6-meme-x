@@ -1,160 +1,177 @@
+#!/usr/bin/env python3
+"""Draw the gta6-meme-x-01 meme: "13 TAHUN" — 2013 kid playing GTA V vs
+2026 the same guy (older, bearded) finally playing GTA VI, with the
+make.fun ghost beside him holding its magenta coin. Deterministic, PIL only."""
+import math
 from PIL import Image, ImageDraw, ImageFont
-import os
 
-# Create 1024x1024 square image
-img = Image.new('RGB', (1024, 1024), (255, 255, 255))
-draw = ImageDraw.Draw(img)
+W = H = 1024
+SPLIT = 500          # top/bottom half boundary
+BAND_Y0, BAND_Y1 = 468, 560   # middle "13 TAHUN" band
 
-# Load DejaVu Sans Bold font (large text)
-try:
-    font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 96)
-    font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 56)
-    font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 40)
-except Exception as e:
-    print(f"Warning: Could not load DejaVu font: {e}")
-    font_large = ImageFont.load_default()
-    font_medium = ImageFont.load_default()
-    font_small = ImageFont.load_default()
-
-# Define colors
+MAGENTA = (230, 0, 126)
+MAGENTA_LT = (255, 77, 168)
+BLACK = (10, 10, 15)
 WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GRAY = (128, 128, 128)
-MAGENTA = (255, 0, 255)
+YELLOW = (255, 230, 0)
+SKIN_Y = (242, 193, 133)
+SKIN_O = (232, 176, 126)
+GREY = (158, 158, 158)
+SHIRT = (30, 136, 229)
+NAVY = (16, 20, 40)
 
-# Helper function to draw 4-pointed star (sparkle)
-def draw_four_pointed_star(draw, x, y, size=30, color=BLACK):
-    # Draw a 4-pointed star with alternating points
-    points = [
-        (x, y - size),      # Top point
-        (x + size//2, y),   # Right point  
-        (x, y + size),      # Bottom point
-        (x - size//2, y),   # Left point
-        (x, y - size//3)    # Inner top point
-    ]
-    draw.polygon(points, fill=color)
+F = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Helper function to draw ghost (proper ghost shape)
-def draw_ghost(draw, x, y, size=240):
-    # Ghost body - curved top, wavy bottom
-    ghost_width = size
-    ghost_height = size * 1.5
-    
-    # Create ghost shape: top curved (semicircle), bottom wavy
-    # Top half: semicircle (curve)
-    top_radius = size * 0.6
-    # For arcs without outline parameter, we need to use a different approach
-    # Draw white arc and then draw outline separately
-    draw.arc([x - top_radius, y - size*0.3, x + top_radius, y + size*0.3], 180, 360, fill=WHITE)
-    # Draw outline (using rectangle lines for ghost outline)
-    draw.line([x - top_radius, y + size*0.3, x + top_radius, y + size*0.3], fill=BLACK, width=4)
-    draw.line([x - top_radius, y - size*0.3, x - top_radius, y + size*0.3], fill=BLACK, width=4)
-    draw.line([x + top_radius, y - size*0.3, x + top_radius, y + size*0.3], fill=BLACK, width=4)
-    
-    # Bottom part: wavy like ghost
-    # Draw multiple small arcs to create wavy bottom
-    bottom_y = y + size * 0.3
-    for i in range(6):
-        wave_x = x - ghost_width * (i / 6) * 0.267
-        wave_radius = size * 0.2
-        # Draw white arc
-        draw.arc([wave_x - wave_radius, bottom_y, wave_x + wave_radius, bottom_y + wave_radius*2], 
-               0, 180, fill=WHITE)
-        # Draw outline for each wave
-        draw.line([wave_x - wave_radius, bottom_y + wave_radius*2, wave_x + wave_radius, bottom_y + wave_radius*2], fill=BLACK, width=4)
-        draw.line([wave_x - wave_radius, bottom_y, wave_x - wave_radius, bottom_y + wave_radius*2], fill=BLACK, width=4)
-        draw.line([wave_x + wave_radius, bottom_y, wave_x + wave_radius, bottom_y + wave_radius*2], fill=BLACK, width=4)
-    
-    # Eyes - 4-pointed stars
-    draw_four_pointed_star(draw, x - 35, y - 70, size=15, color=BLACK)
-    draw_four_pointed_star(draw, x + 35, y - 70, size=15, color=BLACK)
-    
-    # Hand - simple curved shape
-    hand_x = x + 90
-    hand_y = y + 60
-    # Simple curved hand
-    for i in range(5):
-        cx = hand_x + i * 10
-        cy = hand_y + 20 + i * 3
-        draw.ellipse([cx - 8, cy - 12, cx + 8, cy + 8], fill=WHITE, outline=BLACK, width=2)
-    
-    # Coin - large magenta circle with white star
-    coin_x = x + 90
-    coin_y = y - 80
-    coin_radius = 25
-    draw.ellipse([coin_x - coin_radius, coin_y - coin_radius, coin_x + coin_radius, coin_y + coin_radius], fill=MAGENTA)
-    
-    # White star in coin (larger)
-    star_points = [
-        (coin_x, coin_y - 12), (coin_x + 6, coin_y - 6),
-        (coin_x + 12, coin_y), (coin_x + 6, coin_y + 6),
-        (coin_x, coin_y + 12), (coin_x - 6, coin_y + 6),
-        (coin_x - 12, coin_y), (coin_x - 6, coin_y - 6)
-    ]
-    draw.polygon(star_points, fill=WHITE)
-    
-    return coin_x, coin_y
 
-# Draw the meme background and elements
-# Background gradient effect - simple white
+def font(sz):
+    return ImageFont.truetype(F, sz)
 
-# Top half: 2013 - GTA V era
-draw.rectangle([0, 0, 1024, 512], fill=(240, 240, 255))
 
-# Main title "13 TAHUN" - LARGE centered at top
-draw.text((300, 50), "13 TAHUN", fill=BLACK, font=font_large)
+def lerp(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
-# 2013 section
-draw.text((50, 140), "2013", fill=BLACK, font=font_medium)
-draw.text((50, 210), "GTA V", fill=BLACK, font=font_small)
 
-# Simple GTA V controller icon
-draw.rectangle([50, 250, 150, 350], fill=BLACK)
-draw.polygon([(75, 300), (125, 300), (75, 340), (125, 340)], fill=BLACK)
+def text(d, xy, s, f, fill, stroke=0, sc=None, anchor="la"):
+    d.text(xy, s, font=f, fill=fill, stroke_width=stroke,
+           stroke_fill=sc or BLACK, anchor=anchor)
 
-# Bottom half: 2026 - GTA VI era
-draw.rectangle([0, 512, 1024, 1024], fill=(255, 240, 240))
 
-draw.text((50, 600), "2026", fill=BLACK, font=font_medium)
-draw.text((50, 670), "GTA VI", fill=BLACK, font=font_small)
+def vgrad(img, y0, y1, c0, c1):
+    d = ImageDraw.Draw(img)
+    for y in range(y0, y1):
+        d.line([(0, y), (W, y)], fill=lerp(c0, c1, (y - y0) / max(1, y1 - y0 - 1)))
 
-# Older person with beard - simple figure
-def draw_person(draw, x, y, age_description):
-    # Head
-    draw.ellipse([x - 30, y - 80, x + 30, y - 20], fill=(200, 180, 160), outline=BLACK, width=2)
-    # Beard/hair
-    if "older" in age_description or "beard" in age_description or "gray" in age_description:
-        # Gray hair with beard shape
-        draw.ellipse([x - 40, y - 60, x + 40, y - 30], fill=GRAY)
-        # Simple beard line
-        draw.arc([x - 25, y - 50, x + 25, y - 30], 0, 180, fill=GRAY, width=3)
+
+def sparkle4(d, cx, cy, r, fill):
+    k = r * 0.26
+    d.polygon([(cx, cy - r), (cx + k, cy - k), (cx + r, cy), (cx + k, cy + k),
+               (cx, cy + r), (cx - k, cy + k), (cx - r, cy), (cx - k, cy - k)], fill=fill)
+
+
+def star5(cx, cy, R, r, rot=-90):
+    pts = []
+    for i in range(10):
+        a = math.radians(rot + i * 36)
+        rad = R if i % 2 == 0 else r
+        pts.append((cx + rad * math.cos(a), cy + rad * math.sin(a)))
+    return pts
+
+
+def person(d, hx, hy, older, skin):
+    """Simple bold person. Head centre (hx,hy), r=62. Holds a phone up-right."""
+    r = 62
+    # body / shirt
+    d.rounded_rectangle([hx - 88, hy + 68, hx + 88, hy + 218], radius=34,
+                        fill=SHIRT, outline=BLACK, width=8)
+    # head
+    d.ellipse([hx - r, hy - r, hx + r, hy + r], fill=skin, outline=BLACK, width=8)
+    # hair cap (grey when older)
+    hc = GREY if older else BLACK
+    d.pieslice([hx - r - 5, hy - r - 8, hx + r + 5, hy + r - 4], 180, 360, fill=hc)
+    d.rectangle([hx - r - 5, hy - 6, hx + r + 5, hy + 2], fill=hc)
+    # eyes
+    d.ellipse([hx - 28, hy - 12, hx - 12, hy + 4], fill=BLACK)
+    d.ellipse([hx + 12, hy - 12, hx + 28, hy + 4], fill=BLACK)
+    if older:
+        # beard: grey lower half of face
+        d.pieslice([hx - 56, hy - 6, hx + 56, hy + 66], 0, 180, fill=GREY)
+        d.arc([hx - 56, hy - 6, hx + 56, hy + 66], 0, 180, fill=BLACK, width=6)
+        # glasses
+        d.ellipse([hx - 40, hy - 16, hx - 6, hy + 12], outline=BLACK, width=6)
+        d.ellipse([hx + 6, hy - 16, hx + 40, hy + 12], outline=BLACK, width=6)
+        d.line([hx - 6, hy - 2, hx + 6, hy - 2], fill=BLACK, width=6)
+        # wrinkle lines
+        d.line([hx - 34, hy - 26, hx - 14, hy - 24], fill=BLACK, width=4)
+        d.line([hx + 14, hy - 24, hx + 34, hy - 26], fill=BLACK, width=4)
     else:
-        # Young hair
-        draw.arc([x - 25, y - 60, x + 25, y - 40], 180, 360, fill=BLACK, width=2)
-    
-    # Body
-    draw.rectangle([x - 20, y - 50, x + 20, y + 50], fill=(100, 150, 255), outline=BLACK, width=2)
-    
-    # Arms holding controller
-    draw.rectangle([x - 35, y + 10, x - 20, y + 40], fill=(100, 150, 255), outline=BLACK, width=2)
-    draw.rectangle([x + 20, y + 10, x + 35, y + 40], fill=(100, 150, 255), outline=BLACK, width=2)
+        # young smile
+        d.arc([hx - 24, hy + 8, hx + 24, hy + 40], 20, 160, fill=BLACK, width=7)
+    # arm + phone (phone screen shows V or VI)
+    d.line([hx + 60, hy + 120, hx + 108, hy + 100], fill=BLACK, width=30)
+    d.line([hx + 60, hy + 120, hx + 108, hy + 100], fill=skin, width=18)
+    d.rounded_rectangle([hx + 92, hy + 20, hx + 152, hy + 118], radius=10,
+                        fill=BLACK, outline=BLACK)
+    d.rounded_rectangle([hx + 99, hy + 27, hx + 145, hy + 100], radius=6,
+                        fill=(MAGENTA if older else YELLOW))
+    text(d, (hx + 122, hy + 40), ("VI" if older else "V"),
+         font(46 if older else 52), WHITE if older else BLACK, anchor="mm")
+    d.ellipse([hx + 96, hy + 100, hx + 128, hy + 132], fill=skin, outline=BLACK, width=6)
 
-# Draw older person (2026)
-draw_person(draw, 450, 680, "older, beard, gray")
 
-# Beard indicator
-draw.arc([50, 720, 150, 780], 0, 180, fill=GRAY, width=3)
+def ghost(d, cx, cyh):
+    """make.fun ghost: white body, thick black outline, sparkle eyes,
+    round hand, holding magenta coin with white star."""
+    R, o = 82, 11          # head radius, outline
+    yb = cyh + 132         # bottom of straight body
+    rb = 27                # bump radius
+    # black silhouette (expanded) then white on top
+    d.ellipse([cx - R - o, cyh - R - o, cx + R + o, cyh + R + o], fill=BLACK)
+    d.rectangle([cx - R - o, cyh, cx + R + o, yb + o], fill=BLACK)
+    for i in range(3):
+        bx = cx - R + rb + i * (2 * R // 3) + (R // 3 - rb)
+        d.ellipse([bx - rb - o, yb - rb - o, bx + rb + o, yb + rb + o], fill=BLACK)
+    d.ellipse([cx - R, cyh - R, cx + R, cyh + R], fill=WHITE)
+    d.rectangle([cx - R, cyh, cx + R, yb], fill=WHITE)
+    for i in range(3):
+        bx = cx - R + rb + i * (2 * R // 3) + (R // 3 - rb)
+        d.ellipse([bx - rb, yb - rb, bx + rb, yb + rb], fill=WHITE)
+    # face: black four-pointed sparkle eyes + smile
+    sparkle4(d, cx - 28, cyh - 8, 15, BLACK)
+    sparkle4(d, cx + 28, cyh - 8, 15, BLACK)
+    d.arc([cx - 18, cyh + 16, cx + 18, cyh + 48], 15, 165, fill=BLACK, width=6)
+    # left round hand
+    d.line([cx - R + 8, cyh + 60, cx - R - 26, cyh + 88], fill=BLACK, width=20)
+    d.line([cx - R + 8, cyh + 60, cx - R - 26, cyh + 88], fill=WHITE, width=10)
+    d.ellipse([cx - R - 44, cyh + 70, cx - R - 8, cyh + 106], fill=WHITE, outline=BLACK, width=7)
+    # right arm holding coin
+    kx, ky = cx + R + 58, cyh + 92
+    d.line([cx + R - 8, cyh + 58, kx - 26, ky - 6], fill=BLACK, width=22)
+    d.line([cx + R - 8, cyh + 58, kx - 26, ky - 6], fill=WHITE, width=12)
+    # magenta coin with white star, on magenta disc
+    d.ellipse([kx - 52, ky - 52, kx + 52, ky + 52], fill=MAGENTA, outline=BLACK, width=8)
+    d.ellipse([kx - 42, ky - 42, kx + 42, ky + 42], fill=MAGENTA_LT, outline=BLACK, width=4)
+    d.polygon(star5(kx, ky, 26, 11), fill=WHITE, outline=BLACK)
+    d.line([kx - 52, ky - 18, kx - 30, ky - 34], fill=WHITE, width=6)
+    # round little hand over the coin edge
+    d.ellipse([kx - 40, ky - 6, kx - 6, ky + 28], fill=WHITE, outline=BLACK, width=7)
 
-# Grey hair
-draw.ellipse([80, 630, 200, 660], fill=GRAY)
 
-# Make.fun ghost in the scene
-ghost_x, ghost_y = draw_ghost(draw, 800, 650)
+def main():
+    img = Image.new("RGB", (W, H))
+    vgrad(img, 0, SPLIT, (255, 179, 0), (255, 94, 32))       # 2013 sunset
+    vgrad(img, SPLIT, H, NAVY, (38, 52, 100))                # 2026 night
 
-# Ghost holding coin and saying caption
-draw.text((480, 800), "sambil nunggu, aku cari duit di make.fun", fill=BLACK, font=font_medium)
+    d = ImageDraw.Draw(img)
 
-# Save the image
-output_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'meme.png')
-img.save(output_path, 'PNG')
-print(f"Meme saved to: {output_path}")
+    # --- top half: 2013 ---
+    text(d, (40, 18), "2013", font(124), WHITE, stroke=9)
+    text(d, (44, 158), "GTA V", font(66), YELLOW, stroke=7)
+    person(d, 770, 250, older=False, skin=SKIN_Y)
+
+    # --- middle band: 13 TAHUN ---
+    d.rectangle([0, BAND_Y0, W, BAND_Y1], fill=BLACK)
+    text(d, (W // 2, (BAND_Y0 + BAND_Y1) // 2 + 4), "13 TAHUN",
+         font(92), WHITE, stroke=6, sc=MAGENTA, anchor="mm")
+
+    # --- bottom half: 2026 ---
+    text(d, (40, 588), "2026", font(124), WHITE, stroke=9)
+    text(d, (44, 726), "GTA VI", font(66), MAGENTA_LT, stroke=7)
+    person(d, 505, 780, older=True, skin=SKIN_O)
+
+    # speech bubble (ghost's line)
+    d.rounded_rectangle([618, 588, 1004, 726], radius=26, fill=WHITE, outline=BLACK, width=7)
+    d.polygon([(846, 724), (906, 724), (862, 786)], fill=WHITE, outline=BLACK)
+    d.line([846, 726, 862, 784], fill=BLACK, width=7)
+    d.line([906, 726, 862, 784], fill=BLACK, width=7)
+    text(d, (811, 606), "sambil nunggu,", font(40), NAVY, anchor="mm")
+    text(d, (811, 652), "aku cari duit", font(40), NAVY, anchor="mm")
+    text(d, (811, 698), "di make.fun", font(40), MAGENTA, anchor="mm")
+
+    ghost(d, 858, 812)
+
+    img.save("meme.png")
+    print("meme.png written", img.size)
+
+
+if __name__ == "__main__":
+    main()
