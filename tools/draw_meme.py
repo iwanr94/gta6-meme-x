@@ -155,8 +155,19 @@ def ring(mask, ow):
     return ImageChops.subtract(dil, mask).filter(ImageFilter.GaussianBlur(0.7))
 
 
-def outline(layer, mask, ow=3, colour=OUT):
-    layer.paste(colour, (0, 0), ring(mask, ow))
+OUTLINE_MAX = 1                    # hairline only: thick strokes read as a sticker
+EDGE_SOFT = (60, 50, 46)           # warm dark used for 1 px rims
+
+
+def outline(layer, mask, ow=1, colour=EDGE_SOFT):
+    """Hairline edge around a mask.
+
+    Every shape used to get a 3-6 px near-black stroke, which is what made the
+    whole panel look like a die-cut sticker.  Nothing wider than OUTLINE_MAX is
+    drawn now, and the stroke colour is a warm dark that sits *with* the local
+    colour instead of cutting it out.
+    """
+    layer.paste(colour, (0, 0), ring(mask, min(ow, OUTLINE_MAX)))
 
 
 def edge_grad(mask, strength, side, softness=6):
