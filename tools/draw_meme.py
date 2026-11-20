@@ -244,8 +244,36 @@ def fist(layer, x, y, r, skin, ow=3):
                                        lx=0.3, ly=-0.35))
     f = ImageDraw.Draw(layer)
     f.arc([x - r * .8, y - r * .6, x + r * .8, y + r * .5], 200, 340,
-          fill=darken(skin, .55), width=2)
+          fill=darken(skin, .55), width=1)
     outline(layer, m, ow)
+
+
+def hair_strands(layer, mask, cx, top, span, h, hair, n=11, lean=-0.16):
+    """Draw individual hair strands (curved 1 px strokes) inside `mask`.
+
+    A single flat blob is the other half of the sticker look: hair reads as
+    hair when you can see strands catching the light and strands falling into
+    shadow, so each clump gets alternating light/dark curves.
+    """
+    s = new_layer(layer.size)
+    ds = ImageDraw.Draw(s)
+    for i in range(n):
+        t = i / max(1, n - 1)
+        x0 = cx - span + 2 * span * t
+        spread = (x0 - cx)
+        p0 = (cx + spread * 0.35, top + 1)
+        p1 = (cx + spread * (1.0 + lean), top + h * 0.5)
+        p2 = (cx + spread * (1.05 + lean * 1.6), top + h * (0.86 + 0.14 * (i % 2)))
+        pts = [bez(p0, p1, p2, k / 10.0) for k in range(11)]
+        if i % 4 == 1:
+            col = lighten(hair, .5)
+        elif i % 4 == 3:
+            col = darken(hair, .28)
+        else:
+            col = darken(hair, .5)
+        ds.line(pts, fill=col, width=1)
+    s.putalpha(ImageChops.multiply(s.split()[3], mask))
+    layer.alpha_composite(s)
 
 
 def person(layer, cx, feet, cfg, hand=None):
@@ -312,7 +340,7 @@ def person(layer, cx, feet, cfg, hand=None):
         d2 = ImageDraw.Draw(layer)
         for fx in (-20, -2, 16):
             d2.line([(cx + fx * 0.6, waist + 6), (cx + fx, knee + 2)],
-                    fill=darken(shirt, .42), width=3)
+                    fill=darken(shirt, .38), width=1)
         shade_side(layer, m, "l", 120, 7)
         rim_light(layer, m, 3, 2, 1.5, amount=140)
         outline(layer, m, 3)
@@ -334,7 +362,7 @@ def person(layer, cx, feet, cfg, hand=None):
         # belt
         d2 = ImageDraw.Draw(layer)
         d2.rounded_rectangle([cx - 25, waist - 9, cx + 25, waist + 2], radius=4,
-                             fill=(58, 44, 38), outline=OUT, width=2)
+                             fill=(58, 44, 38), outline=EDGE_SOFT, width=1)
         d2.rectangle([cx - 6, waist - 9, cx + 6, waist + 2], fill=(196, 160, 70),
                      outline=OUT, width=1)
 
@@ -391,11 +419,8 @@ def person(layer, cx, feet, cfg, hand=None):
         ph.polygon([(cx + hrx + 9, hcy + 20), (cx + hrx - 6, hcy + 30),
                     (cx + hrx - 4, hcy + 78), (cx + hrx + 9, hcy + 78)], fill=0)
         paste_paint(layer, mh, paint_vgrad([(0, h_hi), (0.4, hair), (1, h_lo)]))
-        dl = ImageDraw.Draw(layer)
-        for sx in (-18, -6, 8, 19):
-            dl.line([(cx + sx, hcy + 34), (cx + sx * 1.1, hcy + 70)],
-                    fill=darken(hair, .55), width=2)
         soft_blob(layer, [cx - 8, hcy + 40, cx + 26, hcy + 74], hair, 90, 8)
+        hair_strands(layer, mh, cx, hcy - 2, hrx + 7, 68, hair, n=13, lean=-0.05)
         outline(layer, mh, 3)
 
     if cfg.get("bun"):
@@ -419,7 +444,7 @@ def person(layer, cx, feet, cfg, hand=None):
         paste_paint(layer, me, paint_sphere(s_hi, skin, s_lo, lx=0.3, ly=-0.2))
         outline(layer, me, 2)
 
-    # hair on top
+    # hair on top: strands, not a blob
     mh = Image.new("L", layer.size, 0)
     ph = ImageDraw.Draw(mh)
     top = hcy - hry
@@ -430,48 +455,72 @@ def person(layer, cx, feet, cfg, hand=None):
                 (cx + hrx - 4, top + 38), (cx + hrx - 6, top + 20)], fill=255)
     paste_paint(layer, mh, paint_vgrad([(0, lighten(hair, .4)), (0.35, hair),
                                         (1, darken(hair, .5))]))
-    dl = ImageDraw.Draw(layer)
-    for i, sx in enumerate((-16, -8, 0, 8, 16)):
-        dl.line([(cx + sx * .5, top + 4), (cx + sx, top + 26)],
-                fill=darken(hair, .45), width=2)
+    hair_strands(layer, mh, cx, top + 1, hrx + 1, 36, hair, n=15, lean=-0.2)
     rim_light(layer, mh, 3, 2, 1.6, amount=190)
     outline(layer, mh, 3)
 
     # ---- face ----------------------------------------------------------
-    ey = hcy - 3
+    # Realistic proportions: eye sockets sit a hair above mid-skull, the eye
+    # opening is a narrow almond (not a dot, not an anime saucer), and every
+    # feature is placed with a soft shadow instead of a hard stroke.
+    ey = hcy - 2
+    iris = (92, 62, 40) if not old else (126, 116, 104)
+    brow_col = mix(hair, darken(skin, .55), 0.25)
     for ex in (-9, 9):
-        soft_blob(layer, [cx + ex - 8, ey - 9, cx + ex + 8, ey + 4], (0, 0, 0), 70, 5)
+        # socket recess + upper-lid shadow give the eye a real head around it
+        soft_blob(layer, [cx + ex - 9, ey - 8, cx + ex + 9, ey + 5], darken(skin, .58), 55, 5)
+        # sclera: almond, slightly narrower than tall
         me = Image.new("L", layer.size, 0)
-        ImageDraw.Draw(me).ellipse([cx + ex - 6, ey - 5, cx + ex + 6, ey + 4], fill=255)
-        layer.paste((250, 246, 240), (0, 0), me)
+        ImageDraw.Draw(me).ellipse([cx + ex - 6, ey - 4, cx + ex + 6, ey + 4], fill=255)
+        layer.paste(mix((246, 242, 236), darken(skin, .1), .25), (0, 0), me)
         di = ImageDraw.Draw(layer)
-        iris = (86, 56, 36) if not cfg.get("old") else (120, 110, 100)
-        di.ellipse([cx + ex - 3, ey - 4, cx + ex + 3, ey + 3], fill=iris)
-        di.ellipse([cx + ex - 1, ey - 3, cx + ex + 1, ey + 1], fill=BLACK)
-        di.ellipse([cx + ex + 0.5, ey - 3, cx + ex + 2, ey - 1], fill=WHITE)
-        di.line([(cx + ex - 6, ey - 6), (cx + ex + 6, ey - 6)], fill=darken(skin, .6), width=2)
+        # eyeball shading top+bottom so the white is not flat paper
+        soft_blob(layer, [cx + ex - 6, ey - 5, cx + ex + 6, ey - 1], darken(skin, .5), 60, 2)
+        di.ellipse([cx + ex - 3, ey - 3, cx + ex + 2, ey + 3], fill=iris)
+        di.ellipse([cx + ex - 2, ey - 2, cx + ex + 1, ey + 1], fill=darken(iris, .7))
+        di.point((cx + ex - 1, ey - 2), fill=(252, 250, 246))
+        # upper lid line (1 px) + lower lash line, both tapered
+        di.arc([cx + ex - 6, ey - 5, cx + ex + 6, ey + 4], 186, 354,
+               fill=darken(skin, .62), width=1)
+        di.arc([cx + ex - 6, ey - 3, cx + ex + 6, ey + 5], 8, 172,
+               fill=darken(skin, .28), width=1)
+        # crease above the lid
+        di.arc([cx + ex - 6, ey - 8, cx + ex + 6, ey + 1], 200, 340,
+               fill=darken(skin, .3), width=1)
     d = ImageDraw.Draw(layer)
-    # brows
-    bw = 3 if not old else 4
-    d.line([(cx - 16, ey - 12), (cx - 4, ey - 14)], fill=darken(hair, .2), width=bw)
-    d.line([(cx + 4, ey - 14), (cx + 16, ey - 12)], fill=darken(hair, .2), width=bw)
+    # brows: natural arch, thin at the outer end
+    for sgn in (-1, 1):
+        x0, x1 = cx + sgn * 15, cx + sgn * 4
+        d.line([(x0, ey - 11), (cx + sgn * 10, ey - 14), (x1, ey - 13)],
+               fill=brow_col, width=2 if not old else 1)
+        d.line([(x0, ey - 10), (cx + sgn * 9, ey - 13)],
+               fill=lighten(brow_col, .18), width=1)
 
-    # nose: shadowed side + lit bridge
-    soft_blob(layer, [cx - 3, hcy + 4, cx + 6, hcy + 14], darken(skin, .55), 95, 3)
-    d.line([(cx + 1, hcy + 3), (cx + 3, hcy + 12)], fill=lighten(skin, .35), width=3)
-    d.arc([cx - 4, hcy + 8, cx + 5, hcy + 16], 20, 150, fill=darken(skin, .5), width=2)
+    # nose: small bridge highlight, nostril shadow, gentle tip
+    soft_blob(layer, [cx - 2, hcy + 2, cx + 5, hcy + 11], darken(skin, .42), 62, 3)
+    d.line([(cx + 1, hcy + 1), (cx + 2, hcy + 8)], fill=lighten(skin, .3), width=1)
+    d.arc([cx - 4, hcy + 6, cx + 5, hcy + 13], 15, 145, fill=darken(skin, .46), width=1)
+    d.point((cx - 2, hcy + 11), fill=darken(skin, .55))
+    d.point((cx + 3, hcy + 11), fill=darken(skin, .5))
 
-    # mouth
-    my = hcy + 19
+    # mouth: cupid's bow upper lip, lit lower lip, soft corner shadows
+    my = hcy + 18
+    lip = mix((150, 88, 82), darken(skin, .25), .45) if not old else darken(skin, .35)
+    d.line([(cx - 9, my - 1), (cx - 4, my - 3), (cx, my - 1),
+            (cx + 4, my - 3), (cx + 9, my - 1)], fill=lip, width=2 if not old else 1)
     if old:
-        d.arc([cx - 9, my - 4, cx + 9, my + 9], 20, 160, fill=darken(skin, .5), width=3)
+        d.arc([cx - 9, my - 3, cx + 9, my + 7], 20, 160, fill=darken(skin, .5), width=1)
     else:
-        d.arc([cx - 10, my - 5, cx + 10, my + 10], 25, 155, fill=(118, 62, 58), width=3)
-        d.line([(cx - 6, my + 8), (cx + 6, my + 8)], fill=lighten(skin, .25), width=2)
+        d.arc([cx - 9, my - 2, cx + 9, my + 9], 22, 158, fill=darken(lip, .3), width=1)
+        soft_blob(layer, [cx - 6, my + 2, cx + 6, my + 8], lighten(skin, .45), 70, 3)
+    d.point((cx - 9, my - 1), fill=darken(skin, .45))
+    d.point((cx + 9, my - 1), fill=darken(skin, .45))
 
-    # cheeks / specular
-    soft_blob(layer, [cx + 4, hcy + 6, cx + 20, hcy + 20], lighten(skin, .5), 55, 7)
-    soft_blob(layer, [cx - 20, hcy + 6, cx - 6, hcy + 20], (150, 60, 60), 40, 7)
+    # cheeks / specular: lit cheekbone, soft blush, jaw shadow
+    soft_blob(layer, [cx + 4, hcy + 4, cx + 20, hcy + 18], lighten(skin, .5), 55, 7)
+    soft_blob(layer, [cx - 19, hcy + 5, cx - 5, hcy + 18], (168, 76, 74), 34, 7)
+    soft_blob(layer, [cx + 5, hcy + 6, cx + 17, hcy + 17], (176, 92, 84), 24, 6)
+    soft_blob(layer, [cx - 14, hcy + 20, cx + 16, hcy + 30], darken(skin, .5), 40, 6)
 
     if old:
         # wrinkles + bags
@@ -492,16 +541,15 @@ def person(layer, cx, feet, cfg, hand=None):
         pb.ellipse([cx - 22, hcy + 6, cx + 22, hcy + 34], fill=255)
         pb.ellipse([cx - 12, hcy + 12, cx + 12, hcy + 26], fill=0)
         paste_paint(layer, mb, paint_vgrad([(0, lighten(hair, .18)), (1, darken(hair, .3))]))
-        for sx in (-16, -8, 8, 16):
-            d.line([(cx + sx, hcy + 20), (cx + sx, hcy + 30)], fill=darken(hair, .3), width=1)
+        hair_strands(layer, mb, cx, hcy + 16, 20, 18, hair, n=11, lean=-0.02)
         outline(layer, mb, 2)
 
     if cfg.get("glasses"):
-        d.ellipse([cx - 19, ey - 10, cx - 3, ey + 6], outline=(52, 48, 52), width=3)
-        d.ellipse([cx + 3, ey - 10, cx + 19, ey + 6], outline=(52, 48, 52), width=3)
-        d.line([(cx - 3, ey - 3), (cx + 3, ey - 3)], fill=(52, 48, 52), width=3)
-        d.line([(cx - 19, ey - 4), (cx - hrx, ey - 6)], fill=(52, 48, 52), width=2)
-        d.line([(cx + 19, ey - 4), (cx + hrx, ey - 6)], fill=(52, 48, 52), width=2)
+        d.ellipse([cx - 19, ey - 10, cx - 3, ey + 6], outline=(52, 48, 52), width=1)
+        d.ellipse([cx + 3, ey - 10, cx + 19, ey + 6], outline=(52, 48, 52), width=1)
+        d.line([(cx - 3, ey - 3), (cx + 3, ey - 3)], fill=(52, 48, 52), width=1)
+        d.line([(cx - 19, ey - 4), (cx - hrx, ey - 6)], fill=(52, 48, 52), width=1)
+        d.line([(cx + 19, ey - 4), (cx + hrx, ey - 6)], fill=(52, 48, 52), width=1)
         d.line([(cx - 16, ey - 7), (cx - 9, ey + 2)], fill=(226, 236, 248), width=2)
         d.line([(cx + 6, ey - 7), (cx + 13, ey + 2)], fill=(226, 236, 248), width=2)
 
@@ -728,6 +776,204 @@ def vignette(img, strength=120):
     img.alpha_composite(dark)
 
 
+def wall_poster(img, x0, y0, x1, y1):
+    """Framed picture on the back wall: matt board, sunset art, glass sheen."""
+    drop = new_layer(img.size)
+    ImageDraw.Draw(drop).rectangle([x0 + 4, y0 + 6, x1 + 4, y1 + 6], fill=(30, 22, 18, 120))
+    img.alpha_composite(drop.filter(ImageFilter.GaussianBlur(6)))
+    # wood frame
+    m = Image.new("L", img.size, 0)
+    ImageDraw.Draw(m).rectangle([x0, y0, x1, y1], fill=255)
+    paste_paint(img, m, paint_hgrad([(0, (96, 62, 40)), (0.42, (156, 112, 66)),
+                                     (1, (104, 68, 44))]))
+    rim_light(img, m, -2, -2, 1.4, (255, 226, 176), 110)
+    # matt + art
+    inner = [x0 + 7, y0 + 7, x1 - 7, y1 - 7]
+    m2 = Image.new("L", img.size, 0)
+    ImageDraw.Draw(m2).rectangle(inner, fill=255)
+    img.paste((238, 232, 218), (0, 0), m2)
+    art = [inner[0] + 6, inner[1] + 6, inner[2] - 6, inner[3] - 6]
+    m3 = Image.new("L", img.size, 0)
+    ImageDraw.Draw(m3).rectangle(art, fill=255)
+    paste_paint(img, m3, paint_vgrad([(0.0, (86, 60, 132)), (0.4, (214, 106, 104)),
+                                      (0.72, (252, 170, 112)), (1.0, (255, 214, 154))]))
+    a = ImageDraw.Draw(img)
+    a.ellipse([art[2] - 26, art[1] + 10, art[2] - 6, art[1] + 30], fill=(255, 246, 206))
+    a.polygon([(art[0], art[3] - 14), (art[0] + 16, art[3] - 26), (art[0] + 30, art[3] - 14)],
+              fill=(88, 54, 78))
+    a.polygon([(art[2] - 26, art[3] - 14), (art[2] - 12, art[3] - 22),
+               (art[2], art[3] - 12)], fill=(96, 58, 84))
+    # glass sheen across the matt + art
+    sheen = new_layer(img.size)
+    ImageDraw.Draw(sheen).polygon([(x0 + 10, y1 - 10), (x0 + 34, y0 + 10),
+                                   (x0 + 46, y0 + 10), (x0 + 22, y1 - 10)],
+                                  fill=(255, 255, 255, 42))
+    sheen.putalpha(ImageChops.multiply(sheen.split()[3], m))
+    img.alpha_composite(sheen)
+    rim_light(img, m, 1, 1, 1.0, (255, 240, 214), 120)
+    outline(img, m, 1)
+
+
+def bookshelf(img, x0, y0, x1, y1):
+    """Filled bookcase: wood carcass, boards, multicoloured spines, shadows."""
+    m = Image.new("L", img.size, 0)
+    ImageDraw.Draw(m).rectangle([x0, y0, x1, y1], fill=255)
+    paste_paint(img, m, paint_hgrad([(0, (74, 46, 30)), (0.4, (132, 88, 56)),
+                                     (0.72, (156, 108, 68)), (1, (86, 54, 36))]))
+    d = ImageDraw.Draw(img)
+    # recessed back panel
+    back = [x0 + 9, y0 + 9, x1 - 9, y1 - 9]
+    img.paste((54, 36, 26), (back[0], back[1], back[2], back[3]))
+    rows = 3
+    rh = (back[3] - back[1]) // rows
+    spines = [(148, 62, 56), (60, 92, 132), (198, 158, 72), (86, 118, 78),
+              (128, 74, 116), (196, 108, 62), (72, 84, 96), (166, 96, 88)]
+    for r in range(rows):
+        by = back[1] + r * rh
+        # books on this shelf
+
+        bx = back[0] + 3
+        i = 0
+        while bx < back[2] - 5:
+            bw = 5 + int(4 * abs(math.sin(r * 3.1 + i * 1.7)))
+            bh = rh - 14 - int(7 * abs(math.sin(i * 2.3 + r)))
+            if bx + bw > back[2] - 4:
+                break
+            col = spines[int(abs(math.sin(i * 5.3 + r * 2.1)) * len(spines)) % len(spines)]
+            d.rectangle([bx, by + rh - 8 - bh, bx + bw, by + rh - 8], fill=col)
+            d.line([(bx, by + rh - 8 - bh), (bx + bw - 1, by + rh - 8 - bh)],
+                   fill=lighten(col, .3), width=1)
+            d.line([(bx + bw - 1, by + rh - 8 - bh), (bx + bw - 1, by + rh - 8)],
+                   fill=darken(col, .35), width=1)
+            bx += bw + 1
+            i += 1
+        if r == 0:                                   # a small plant on top shelf
+            pot_plant(img, back[2] - 20, by + rh - 9, 13, (74, 126, 74))
+        # board
+        d.rectangle([back[0] - 2, by + rh - 8, back[2] + 2, by + rh - 2], fill=(146, 100, 62))
+        d.line([(back[0] - 2, by + rh - 8), (back[2] + 2, by + rh - 8)],
+               fill=(188, 138, 90), width=1)
+        # shadow under each board
+        sh = new_layer(img.size)
+        ImageDraw.Draw(sh).rectangle([back[0], by + rh - 2, back[2], by + rh + 6],
+                                     fill=(20, 12, 8, 110))
+        img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(3)))
+    outline(img, m, 1)
+
+
+def pot_plant(img, cx, base_y, s, leaf, pot=(150, 92, 74)):
+    """Small potted plant: tapered pot, rim, layered leaves."""
+    m = Image.new("L", img.size, 0)
+    p = ImageDraw.Draw(m)
+    p.polygon([(cx - s * 0.62, base_y - s * 0.9), (cx + s * 0.62, base_y - s * 0.9),
+               (cx + s * 0.42, base_y), (cx - s * 0.42, base_y)], fill=255)
+    paste_paint(img, m, paint_hgrad([(0, darken(pot, .35)), (0.45, pot),
+                                     (1, lighten(pot, .3))]))
+    p2 = ImageDraw.Draw(img)
+    p2.rectangle([cx - s * 0.66, base_y - s * 1.04, cx + s * 0.66, base_y - s * 0.86],
+                 fill=lighten(pot, .12))
+    # leaves: lens shapes fanning out of the pot
+    for i in range(7):
+        ang = math.radians(-150 + i * 20)
+        length = s * (1.15 + 0.45 * math.sin(i * 1.9))
+        tipx = cx + math.cos(ang) * length * 0.85
+        tipy = base_y - s * 0.95 + math.sin(ang) * length
+        mx = (cx + tipx) / 2 + math.cos(ang + 1.4) * s * 0.28
+        my = (base_y - s * 0.95 + tipy) / 2 + math.sin(ang + 1.4) * s * 0.28
+        pts = [bez((cx, base_y - s * 0.95), (mx, my), (tipx, tipy), k / 8.0) for k in range(9)]
+        up = [(px + 2, py - 2) for px, py in pts]
+        poly = pts + up[::-1]
+        col = mix(leaf, (255, 240, 170), 0.22 if i % 3 == 0 else 0.0)
+        col = darken(col, .28 if i % 2 else 0.0)
+        ImageDraw.Draw(img).polygon(poly, fill=col)
+    rim_light(img, m, 2, 2, 1.2, (255, 240, 210), 90)
+
+
+def room_2013(img):
+    """Indoor back wall + wooden floor, poster left, bookcase right."""
+    wall = new_layer(img.size)
+    band = Image.new("L", img.size, 0)
+    ImageDraw.Draw(band).rectangle([0, 0, PW, 250], fill=255)
+    paste_paint(wall, band, paint_vgrad([(0.0, (232, 212, 184)), (0.55, (214, 190, 162)),
+                                         (1.0, (188, 162, 134))]))
+    img.alpha_composite(wall)
+    # warm daylight falling from the top right + faint wallpaper stripes
+    warm = new_layer(img.size)
+    ImageDraw.Draw(warm).ellipse([520, -220, 1180, 300], fill=(255, 244, 212, 90))
+    img.alpha_composite(warm.filter(ImageFilter.GaussianBlur(70)))
+    st = ImageDraw.Draw(img)
+    for x in range(0, PW, 34):
+        st.line([(x, 0), (x, 246)], fill=(204, 182, 156), width=1)
+    # corner shadow where wall meets floor
+    sh = new_layer(img.size)
+    ImageDraw.Draw(sh).rectangle([0, 214, PW, 252], fill=(60, 40, 30, 90))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(12)))
+    # baseboard + wooden floor
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 244, PW, 254], fill=(226, 214, 196))
+    d.line([(0, 244), (PW, 244)], fill=(150, 130, 108), width=1)
+    fl = new_layer(img.size)
+    fband = Image.new("L", img.size, 0)
+    ImageDraw.Draw(fband).rectangle([0, 252, PW, PH], fill=255)
+    paste_paint(fl, fband, paint_vgrad([(0, (152, 100, 62)), (1, (104, 64, 40))]))
+    img.alpha_composite(fl)
+    for i in range(9):                                  # plank seams
+        y = 256 + i * 9
+        d.line([(0, y), (PW, y)], fill=darken((132, 86, 54), .3), width=1)
+    for i in range(14):
+        x = 8 + i * 72
+        d.line([(x, 252), (x - 10, PH)], fill=(120, 78, 48), width=1)
+    wall_poster(img, 196, 26, 314, 122)
+    bookshelf(img, 786, 30, 930, 246)
+
+
+def skyline(img, base_y):
+    """Three depth layers of buildings with lit windows, antennas, haze."""
+    far = new_layer(img.size)
+    df = ImageDraw.Draw(far)
+    for i in range(16):
+        bx = -20 + i * 62
+        bh = 26 + int(30 * abs(math.sin(i * 2.7)))
+        df.rectangle([bx, base_y - bh, bx + 46, base_y], fill=(150, 108, 138, 255))
+        df.rectangle([bx + 20, base_y - bh - 18, bx + 24, base_y - bh],
+                     fill=(150, 108, 138, 255))
+    img.alpha_composite(far.filter(ImageFilter.GaussianBlur(2.4)))
+    mid = new_layer(img.size)
+    dm = ImageDraw.Draw(mid)
+    for i in range(11):
+        bx = -10 + i * 92
+        bh = 40 + int(46 * abs(math.sin(i * 1.7 + 1)))
+        dm.rectangle([bx, base_y - bh, bx + 62, base_y], fill=(104, 76, 112, 255))
+        dm.polygon([(bx, base_y - bh), (bx + 31, base_y - bh - 16),
+                    (bx + 62, base_y - bh)], fill=(104, 76, 112, 255))
+        for r in range(bh // 12):
+            for c in range(4):
+                wx = bx + 6 + c * 14
+                wy = base_y - bh + 8 + r * 12
+                if 0.55 < abs(math.sin(i * 3.1 + r * 1.3 + c * 2.2)):
+                    dm.rectangle([wx, wy, wx + 6, wy + 6], fill=(255, 214, 138, 255))
+    img.alpha_composite(mid.filter(ImageFilter.GaussianBlur(0.8)))
+    haze = new_layer(img.size)
+    ImageDraw.Draw(haze).rectangle([0, base_y - 70, PW, base_y + 6],
+                                   fill=(238, 150, 130, 60))
+    img.alpha_composite(haze.filter(ImageFilter.GaussianBlur(20)))
+
+
+def foreground_plants(img):
+    """Foreground dressing for 2026: street planter, tall pot, two shrubs."""
+    pot_plant(img, 74, 268, 30, (70, 104, 78), (120, 74, 60))
+    pot_plant(img, 902, 272, 26, (84, 118, 86), (134, 86, 66))
+    for cx, s, col in ((164, 20, (66, 98, 70)), (828, 16, (78, 110, 78))):
+        m = Image.new("L", img.size, 0)
+        p = ImageDraw.Draw(m)
+        for i in range(5):
+            p.ellipse([cx - s + i * s * 0.42, 250 - s * (0.7 + 0.3 * (i % 2)),
+                       cx - s * 0.2 + i * s * 0.42, 264], fill=255)
+        paste_paint(img, m, paint_sphere(lighten(col, .4), col, darken(col, .45),
+                                         lx=0.3, ly=-0.5))
+        rim_light(img, m, 2, 2, 1.4, (255, 226, 180), 110)
+
+
 def panel(year, old):
     img = new_layer((PW, PH))
     if old:
@@ -739,49 +985,17 @@ def panel(year, old):
         sun(img, 700, 176, 54, (255, 246, 214), (255, 226, 168), (255, 186, 120), 6)
         for cx, cy, w, h in ((180, 56, 120, 18), (430, 40, 150, 14), (760, 74, 130, 16)):
             cloud(img, cx, cy, w, h, (232, 152, 150), (255, 206, 176), (150, 92, 128), 210)
-        # far city / hills silhouette, hazy
-        far = new_layer((PW, PH))
-        d = ImageDraw.Draw(far)
-        hill = [(0, 210)]
-        for i in range(0, 21):
-            x = i * PW / 20.0
-            hill.append((x, 196 + 10 * math.sin(i * 0.9)))
-        hill += [(PW, 210)]
-        d.polygon(hill, fill=(120, 78, 116, 255))
-        for i in range(9):
-            bx = 60 + i * 96
-            bh = 16 + 12 * abs(math.sin(i * 1.7))
-            d.rectangle([bx, 200 - bh, bx + 26, 212], fill=(112, 72, 110, 255))
-        far = far.filter(ImageFilter.GaussianBlur(1.6))
-        img.alpha_composite(far)
-        ground_strip(img, 204, PH - 204, (128, 96, 104), (58, 44, 62), (255, 176, 120))
+        # far city skyline: layered, lit windows, hazy at the base
+        skyline(img, 202)
+        ground_strip(img, 204, PH - 204, (128, 96, 104), (56, 42, 60), (255, 176, 120))
         # sun path on the grass
         b = new_layer((PW, PH))
         ImageDraw.Draw(b).ellipse([520, 196, 900, 240], fill=(255, 196, 130, 90))
         img.alpha_composite(b.filter(ImageFilter.GaussianBlur(16)))
+        foreground_plants(img)
     else:
-        # ---------------- 2013: bright day -----------------------------
-        sky = paint_vgrad([(0.0, (52, 116, 196)), (0.35, (110, 172, 226)),
-                           (0.72, (176, 212, 238)), (1.0, (222, 238, 246))])((PW, PH))
-        img.paste(sky, (0, 0))
-        sun(img, 806, 66, 42, (255, 252, 226), (255, 236, 160), (255, 240, 190), 5)
-        for cx, cy, w, h in ((150, 62, 118, 22), (330, 44, 96, 17), (560, 74, 104, 15)):
-            cloud(img, cx, cy, w, h, (250, 252, 255), (255, 255, 255), (190, 208, 228), 240)
-        # distant hills
-        far = new_layer((PW, PH))
-        d = ImageDraw.Draw(far)
-        d.polygon([(0, 208), (140, 182), (300, 204), (470, 186), (620, 206),
-                   (800, 190), (PW, 204), (PW, 216), (0, 216)], fill=(126, 172, 150, 255))
-        far = far.filter(ImageFilter.GaussianBlur(1.4))
-        img.alpha_composite(far)
-        ground_strip(img, 202, PH - 202, (138, 190, 108), (86, 142, 74), (255, 246, 200))
-        # grass tufts with volume
-        dk = ImageDraw.Draw(img)
-        for i in range(26):
-            gx = 20 + i * 36 + (i % 3) * 5
-            gy = 216 + (i * 7) % 52
-            dk.line([(gx, gy), (gx - 3, gy - 7)], fill=(70, 118, 62), width=2)
-            dk.line([(gx, gy), (gx + 4, gy - 9)], fill=(158, 206, 118), width=2)
+        # ---------------- 2013: living room, daylight ------------------
+        room_2013(img)
 
     ppl = new_layer((PW, PH))
     if old:
