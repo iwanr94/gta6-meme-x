@@ -6,11 +6,11 @@ Two-panel "13 years of waiting" meme:
   panel 1 ("2013") - young CJ (black man, short hair, GREEN t-shirt) holding
                      hands with his young girlfriend (long hair)
   panel 2 ("2026") - the same couple, still holding hands, now grandpa &
-                     grandma (white hair, white beard, glasses / white bun)
+                     grandma (white hair, white beard, glasses / white bun),
+                     with the make.fun ghost (grim-reaper scythe in hand)
+                     standing BEHIND them, taller than them
 
-Big English headline above, huge make.fun ghost (white, thick black outline,
-four-point star eyes, smile, round hands, magenta coin with a white star)
-bottom-right with the small "my AI made money on make.fun" line.
+Big English headline above, centred "my AI made money on make.fun" line below.
 
 Canvas: 1024x1024, all copy readable when scaled down to 480x480.
 """
@@ -274,6 +274,10 @@ def panel(year, old):
     d.rectangle([0, 224, PW, PH], fill=ground)
     d.rectangle([0, 224, PW, 232], fill=fg)
 
+    if old:
+        # the ghost reaper stands BEHIND the couple -> drawn first
+        ghost(d, 478, 91, 75)
+
     draw_couple(d, old)
 
     # year badge ------------------------------------------------------
@@ -283,47 +287,62 @@ def panel(year, old):
 
 
 # ------------------------------------------------------------------ ghost ----
-def ghost(d, cx, cy):
-    """Big make.fun ghost, white with a thick black outline, holding a coin."""
-    R, o = 70, 11
-    yb = cy + 110
-    rb = 24
+def bez(p0, p1, p2, t):
+    u = 1.0 - t
+    return (u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0],
+            u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1])
 
-    def shell(fill, grow):
-        d.ellipse([cx - R - grow, cy - R - grow, cx + R + grow, cy + R + grow], fill=fill)
-        d.rectangle([cx - R - grow, cy, cx + R + grow, yb + grow], fill=fill)
-        for i in range(3):
-            bx = cx - R + rb + i * ((2 * R - 2 * rb) // 2)
-            d.ellipse([bx - rb - grow, yb - rb - grow, bx + rb + grow, yb + rb + grow], fill=fill)
 
-    # left arm (hangs free, round hand)
-    d.line([(cx - R + 14, cy + 82), (cx - R - 26, cy + 116)], fill=OUT, width=26)
-    d.line([(cx - R + 14, cy + 82), (cx - R - 26, cy + 116)], fill=WHITE, width=12)
-    d.ellipse([cx - R - 46, cy + 100, cx - R - 6, cy + 140], fill=WHITE, outline=OUT, width=8)
+def scythe(d, sx, ytop, ybot):
+    """Grim-reaper scythe: long upright shaft + sharp curved blade at the top."""
+    # shaft ------------------------------------------------------------
+    d.line([(sx, ybot), (sx, ytop - 2)], fill=OUT, width=17)
+    d.line([(sx, ybot), (sx, ytop - 2)], fill=(116, 78, 48), width=10)
+    d.line([(sx - 3, ybot - 8), (sx - 3, ytop + 8)], fill=(160, 114, 72), width=3)
+    for yy in (ytop + 16, ytop + 30):                      # binding rings
+        d.line([(sx - 9, yy), (sx + 9, yy)], fill=(74, 58, 46), width=5)
 
-    # right arm reaching the coin
-    kx, ky, kr = cx + 148, cy + 60, 64
-    d.line([(cx + R - 14, cy + 82), (kx - 40, ky - 12)], fill=OUT, width=30)
-    d.line([(cx + R - 14, cy + 82), (kx - 40, ky - 12)], fill=WHITE, width=15)
+    # blade: crescent, outer edge sweeps right and up, tip hooks down ---
+    a = (sx + 4, ytop - 2)
+    tip = (sx + 190, ytop + 66)
+    outer = [bez(a, (sx + 120, ytop - 46), tip, i / 24.0) for i in range(25)]
+    inner = [bez(tip, (sx + 108, ytop + 16), a, i / 24.0) for i in range(25)]
+    d.polygon(outer + inner, fill=(184, 196, 212), outline=OUT, width=5)
+    d.line(outer, fill=(240, 246, 255), width=4)           # cutting edge
+    d.line(inner[2:-2], fill=(104, 116, 136), width=3)     # shadowed spine
+    d.line([(sx - 2, ytop + 4), (sx + 26, ytop + 14)], fill=OUT, width=6)
 
-    shell(OUT, o)
+
+def ghost(d, cx, cy, r=75):
+    """make.fun ghost (white, black outline, 4-point star eyes, smile) as the
+    Grim Reaper: standing behind the couple, gripping a scythe."""
+    yb = cy + 103
+    rb, n = 19, 3
+
+    def shell(fill, g):
+        d.ellipse([cx - r - g, cy - r - g, cx + r + g, cy + r + g], fill=fill)
+        d.rectangle([cx - r - g, cy, cx + r + g, yb + g], fill=fill)
+        step = (2 * r - 2 * rb) / (n - 1)
+        for i in range(n):
+            bx = cx - r + rb + i * step
+            d.ellipse([bx - rb - g, yb - rb - g, bx + rb + g, yb + rb + g], fill=fill)
+
+    shell(OUT, 9)
     shell(WHITE, 0)
 
-    # face
+    # face -------------------------------------------------------------
     sparkle4(d, cx - 26, cy - 12, 20, OUT)
     sparkle4(d, cx + 26, cy - 12, 20, OUT)
-    d.arc([cx - 26, cy + 16, cx + 26, cy + 58], 15, 165, fill=OUT, width=9)
+    d.arc([cx - 27, cy + 14, cx + 27, cy + 58], 15, 165, fill=OUT, width=8)
 
-    # coin
-    d.ellipse([kx - kr, ky - kr, kx + kr, ky + kr], fill=MAGENTA, outline=OUT, width=9)
-    d.ellipse([kx - kr + 9, ky - kr + 9, kx + kr - 9, ky + kr - 9],
-              fill=MAGENTA_LT, outline=OUT, width=3)
-    d.polygon(star5(kx, ky, kr * 0.56, kr * 0.25), fill=WHITE, outline=OUT)
-    d.line([(kx - kr + 12, ky - kr + 30), (kx - kr + 26, ky - kr + 16)],
-           fill=WHITE, width=6)
+    # scythe held at the ghost's right side ----------------------------
+    sx = cx + 62
+    scythe(d, sx, cy - 61, cy + 163)
 
-    # round hand on top of the coin
-    d.ellipse([kx - 44, ky - 16, kx + 6, ky + 42], fill=WHITE, outline=OUT, width=8)
+    # round hand gripping the shaft ------------------------------------
+    d.ellipse([sx - 27, cy + 30, sx + 19, cy + 76], fill=WHITE, outline=OUT, width=8)
+    for yy in (cy + 42, cy + 56):
+        d.line([(sx - 15, yy), (sx + 9, yy)], fill=OUT, width=3)
 
 
 # ------------------------------------------------------------------- main ----
@@ -349,15 +368,14 @@ def main():
         d.rounded_rectangle([PX, y, PX + PW - 1, y + PH - 1], radius=PANEL_R,
                             outline=YELLOW, width=5)
 
-    # ghost band -------------------------------------------------------
+    # footer -----------------------------------------------------------
     d.line([(28, 738), (W - 28, 738)], fill=(64, 70, 110), width=3)
-    ghost(d, 752, 812)
 
     lines = ("While you waited,", "my AI made money", "on make.fun")
     for i, s in enumerate(lines):
-        size = fit_size(d, s, 560, 38)
-        text(d, (42, 790 + i * 52), s, size, CREAM, stroke_width=4, stroke_fill=BLACK,
-             anchor="lm")
+        size = fit_size(d, s, 900, 50)
+        text(d, (W // 2, 792 + i * 58), s, size, CREAM, stroke_width=4,
+             stroke_fill=BLACK, anchor="mm")
 
     img.save("meme.png")
     print("meme.png written", img.size)
